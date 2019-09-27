@@ -1,0 +1,48 @@
+language: go
+cache:
+  directories:
+    - ~/bitcoin/bitcoin-0.18.0/bin
+    - $GOCACHE
+    - $GOPATH/pkg/mod
+    - $GOPATH/src/github.com/btcsuite
+    - $GOPATH/src/github.com/golang
+    - $GOPATH/src/gopkg.in/alecthomas
+
+go:
+  - "1.13.x"
+
+env:
+  global:
+    - GOCACHE=$HOME/.go-build
+  matrix:
+    - RACE=true
+    - ITEST=true
+    - NEUTRINO_ITEST=true
+    - BITCOIND_ITEST=true
+    - COVER=true 
+
+sudo: required
+
+script:
+  - export GO111MODULE=on
+  - bash ./scripts/install_bitcoind.sh
+
+  # Run unit tests with race condition detector.
+  - 'if [ "$RACE" = true ]; then make travis-race ; fi'
+
+  # Run btcd integration tests.
+  - 'if [ "$ITEST" = true ]; then make travis-itest; fi'
+
+  # Run neutrino integration tests.
+  - 'if [ "$NEUTRINO_ITEST" = true ]; then make travis-itest backend=neutrino; fi'
+
+  # Run bitcoind integration tests.
+  - 'if [ "$BITCOIND_ITEST" = true ]; then make travis-itest backend=bitcoind; fi'
+
+  # Run unit tests and generate coverage report.
+  - 'if [ "$COVER" = true ]; then make travis-cover; fi'
+
+after_script:
+  - LOG_FILES=./lntest/itest/*.log
+  - echo "Uploading to termbin.com..." && find $LOG_FILES | xargs -I{} sh -c "cat {} | nc termbin.com 9999 | xargs -r0 printf '{} uploaded to %s'"
+  - echo "Uploading to file.io..." && tar -zcvO $LOG_FILES | curl -s -F 'file=@-;filename=logs.tar.gz' https://file.io | xargs -r0 printf 'logs.tar.gz uploaded to %s\n'
